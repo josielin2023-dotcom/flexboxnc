@@ -6,7 +6,7 @@ body {
     color: #f5efe6;
     background:
         linear-gradient(rgba(25, 18, 12, 0.6), rgba(25, 18, 12, 0.85)),
-        url("../images/f1.jpg") center / cover no-repeat fixed;
+        url("../images/f1.jpg") center / cover no-repeat fixed;object-fit: cover;
 }
 
 ::selection {
