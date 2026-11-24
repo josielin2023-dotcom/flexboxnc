@@ -16,11 +16,12 @@
 
     <!-- 上傳按鈕 -->
     <div class="toolbar">
-        <label class="upload-btn">
-            ＋ 上傳照片
-            <input type="file" id="fileInput" accept="image/*" multiple hidden>
-        </label>
-    </div>
+    <input type="text" id="titleInput" maxlength="30" placeholder="輸入照片名稱（可留空）">
+    <label class="upload-btn">
+        ＋ 上傳照片
+        <input type="file" id="fileInput" accept="image/*" multiple hidden>
+    </label>
+</div>
 
     <!-- 照片牆：原本的卡片 + 上傳的卡片都放這裡 -->
     <div class="gallery" id="gallery">
@@ -33,83 +34,86 @@
 </section>
 
 <script>
-/* ---------- IndexedDB：把上傳的照片存在這個瀏覽器 ---------- */
-const DB_NAME = 'memories';
-const STORE = 'photos';
-
-function openDB() {
-    return new Promise((resolve, reject) => {
-        const r = indexedDB.open(DB_NAME, 1);
-        r.onupgradeneeded = () =>
-            r.result.createObjectStore(STORE, { keyPath: 'id', autoIncrement: true });
-        r.onsuccess = () => resolve(r.result);
-        r.onerror = () => reject(r.error);
-    });
-}
-const wrap = req => new Promise((resolve, reject) => {
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-});
-const store = (db, mode) => db.transaction(STORE, mode).objectStore(STORE);
-
-/* ---------- 建立卡片 ---------- */
 const gallery = document.getElementById('gallery');
+const fileInput = document.getElementById('fileInput');
+const titleInput = document.getElementById('titleInput');
+const uploadLabel = document.querySelector('.upload-btn');
 
-function addCard(photo) {
+/* 檔名 "1730000000000-夕陽.jpg" → 說明文字 "夕陽" */
+function captionFrom(pathname) {
+    return pathname
+        .replace(/^memories\//, '')
+        .replace(/^\d+-/, '')
+        .replace(/\.[^.]+$/, '');
+}
+
+function addCard({ url, name }) {
     const card = document.createElement('article');
-    card.dataset.id = photo.id;
-
-    const wrapper = document.createElement('div');
-    wrapper.className = 'card-body';
+    const body = document.createElement('div');
+    body.className = 'card-body';
 
     const img = document.createElement('img');
-    img.src = URL.createObjectURL(photo.blob);
-    img.alt = photo.name;
+    img.src = url;
+    img.alt = captionFrom(name);
+    img.loading = 'lazy';
 
     const p = document.createElement('p');
-    p.textContent = photo.name;
+    p.textContent = captionFrom(name);
 
-    const del = document.createElement('button');
-    del.className = 'delete-btn';
-    del.type = 'button';
-    del.textContent = '✕';
-    del.title = '刪除這張照片';
-    del.addEventListener('click', async () => {
-        if (!confirm('要刪除這張照片嗎？')) return;
-        const db = await openDB();
-        await wrap(store(db, 'readwrite').delete(photo.id));
-        URL.revokeObjectURL(img.src);
-        card.remove();
-    });
-
-    wrapper.append(img, p);
-    card.append(wrapper, del);
+    body.append(img, p);
+    card.append(body);
     gallery.append(card);
 }
 
-/* ---------- 上傳 ---------- */
-document.getElementById('fileInput').addEventListener('change', async (e) => {
+/* 上傳前先縮圖：長邊最多 1600px，避開 Vercel 4.5MB 的請求上限 */
+async function shrink(file, maxSide = 1600) {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    return new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+}
+
+fileInput.addEventListener('change', async (e) => {
     const files = [...e.target.files].filter(f => f.type.startsWith('image/'));
     if (!files.length) return;
 
-    const db = await openDB();
+    const typed = titleInput.value.trim();   // 在迴圈外讀一次
+    uploadLabel.classList.add('busy');
+
     for (const file of files) {
-        const photo = {
-            name: file.name.replace(/\.[^.]+$/, ''), // 去掉副檔名當說明文字
-            blob: file,
-            time: Date.now()
-        };
-        photo.id = await wrap(store(db, 'readwrite').add(photo));
-        addCard(photo);
+        try {
+            const blob = await shrink(file);
+            const base = typed || file.name.replace(/\.[^.]+$/, '');
+            const name = base + '.jpg';
+
+            const res = await fetch('/api/upload?filename=' + encodeURIComponent(name), {
+                method: 'POST',
+                headers: { 'Content-Type': 'image/jpeg' },
+                body: blob,
+            });
+            if (!res.ok) throw new Error((await res.json()).error || res.status);
+            addCard(await res.json());
+        } catch (err) {
+            alert('上傳失敗：' + file.name + '\n' + err.message);
+        }
     }
-    e.target.value = ''; // 讓同一張圖可以再選一次
+
+    uploadLabel.classList.remove('busy');
+    titleInput.value = '';
+    e.target.value = '';
 });
 
-/* ---------- 載入之前上傳過的照片 ---------- */
+/* 載入所有人上傳過的照片 */
 (async () => {
-    const db = await openDB();
-    const photos = await wrap(store(db, 'readonly').getAll());
-    photos.sort((a, b) => a.time - b.time).forEach(addCard);
+    try {
+        const res = await fetch('/api/photos');
+        (await res.json()).forEach(addCard);
+    } catch (err) {
+        console.error('載入照片牆失敗', err);
+    }
 })();
 </script>
 </body>
