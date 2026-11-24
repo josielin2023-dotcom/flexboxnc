@@ -12,7 +12,7 @@
 
 <body>
 <section>
-    <h1>MEMORIES</h1>
+    <h1>入職報到</h1>
 
     <!-- 上傳按鈕 -->
     <div class="toolbar">
@@ -25,12 +25,8 @@
 
     <!-- 照片牆：原本的卡片 + 上傳的卡片都放這裡 -->
     <div class="gallery" id="gallery">
-        <article><a href="https://ex1-blond.vercel.app/"><img src="images/ff12.jpg" alt="圖片一"><p>回憶像一陣風</p></a></article>
-        <article><a href="https://ex1-blond.vercel.app/"><img src="images/f2.jpg" alt="圖片二"><p>2回憶像一陣風</p></a></article>
-        <article><a href="https://ex1-blond.vercel.app/"><img src="images/f3.jpg" alt="圖片三"><p>3回憶像一陣風</p></a></article>
-        <article><a href="https://ex1-blond.vercel.app/"><img src="images/f4.jpg" alt="圖片四"><p>4回憶像一陣風</p></a></article>
-        <article><a href="https://ex1-blond.vercel.app/"><img src="images/f5.jpg" alt="圖片五"><p>5回憶像一陣風</p></a></article>
-    </div>
+    <article><a href="images/ff12.jpg" target="_blank"><img src="images/ff12.jpg" alt="範例圖片"><p>小明</p></a></article>
+</div>
 </section>
 
 <script>
@@ -49,8 +45,11 @@ function captionFrom(pathname) {
 
 function addCard({ url, name }) {
     const card = document.createElement('article');
-    const body = document.createElement('div');
-    body.className = 'card-body';
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';        // 開新分頁
+    link.rel = 'noopener';
 
     const img = document.createElement('img');
     img.src = url;
@@ -60,8 +59,8 @@ function addCard({ url, name }) {
     const p = document.createElement('p');
     p.textContent = captionFrom(name);
 
-    body.append(img, p);
-    card.append(body);
+    link.append(img, p);
+    card.append(link);
     gallery.append(card);
 }
 
